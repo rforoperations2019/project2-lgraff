@@ -9,6 +9,8 @@ require(stringr)
 
 require(raptr)
 require(PBSmapping)
+require(ggplot2)
+require(plotly)
 
 # Load FL eviction data. Source: https://data-downloads.evictionlab.org/
 FL_counties <- readOGR("FL_eviction_counties.geojson")
@@ -41,3 +43,20 @@ View(FL_16@data)
 # Data types
 sapply(FL_16@data, typeof)
 FL_16@data$county <- as.factor(FL_16@data$county)
+
+test <- FL_16@data
+# Plots
+# scatterplot
+ggplotly(
+  ggplot(data = test) +
+    geom_point(aes(x = median_gross_rent, y = eviction_rate/100)) 
+)
+
+ggplot(data = test) +
+  geom_point(aes(x = median_property_val, y = median_income))
+
+max(test$eviction_rate, na.rm = T)  
+
+# histogram
+ggplot(data = test) +
+  geom_histogram(aes(x = median_gross_rent))

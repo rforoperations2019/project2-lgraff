@@ -20,6 +20,8 @@ require(stringr)
 
 require(raptr)
 require(PBSmapping)
+library(ggplot2)
+library(plotly)
 
 # Data preparation
 
@@ -50,39 +52,68 @@ FL_16@data <- cbind(FL_16@data, centroid)
 
 FL_16@data$county <- as.factor(FL_16@data$county)
 
+df_FL <- FL_16@data
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
    # Application title
-   titlePanel("Old Faithful Geyser Data"),
+   titlePanel("Florida Housing Data"),
    
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
         # Input 1: county
-        selectInput("county", label = h3("Select a county:"), 
-                    choices = unique(levels(FL_16@data$county)))
+        selectInput("county", label = "Select a county:", 
+                    choices = unique(levels(FL_16@data$county))),
+        
+        # Input 2: x-variable
+        selectInput("var1", label = "Select a variable 1:", 
+                    choices = c("Population" = "population",
+                                "Poverty Rate" = "poverty_rate",
+                                "Renter Occupied Housholds" = "renter_occ_households",
+                                "Percent Renter" = "pct_renter",
+                                "Median Gross Rent" = "median_gross_rent",
+                                "Median Income" = "median_income",
+                                "Median Property Value" = "median_property_val",
+                                "Rent Burden" = "rent_burden",
+                                "Eviction Filings" = "eviction_filings",
+                                "Evictions" = "evictions",
+                                "Eviction Rate" = "eviction_rate"
+                                )),
+        
+        # Input 3: y-variable
+        selectInput("var2", label = "Select a variable 2:", 
+                    choices = c("Population" = "population",
+                                "Poverty Rate" = "poverty_rate",
+                                "Renter Occupied Housholds" = "renter_occ_households",
+                                "Percent Renter" = "pct_renter",
+                                "Median Gross Rent" = "median_gross_rent",
+                                "Median Income" = "median_income",
+                                "Median Property Value" = "median_property_val",
+                                "Rent Burden" = "rent_burden",
+                                "Eviction Filings" = "eviction_filings",
+                                "Evictions" = "evictions",
+                                "Eviction Rate" = "eviction_rate"
+                    ))
       ),
       
       # Show a plot of the generated distribution
       mainPanel(
-         plotOutput("distPlot")
+         plotlyOutput("scatter")
       )
    )
 )
 
-# Define server logic required to draw a histogram
 server <- function(input, output) {
-   
-   output$distPlot <- renderPlot({
-      # generate bins based on input$bins from ui.R
-      x    <- faithful[, 2] 
-      bins <- seq(min(x), max(x), length.out = input$bins + 1)
-      
-      # draw the histogram with the specified number of bins
-      hist(x, breaks = bins, col = 'darkgray', border = 'white')
-   })
+  
+  output$scatter <- renderPlotly(
+    ggplotly(
+      ggplot(data = FL_16@data) +
+        geom_point(aes_string(x = input$var1, y = input$var2))
+    )
+  )
+
 }
 
 # Run the application 
