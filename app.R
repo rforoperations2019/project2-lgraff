@@ -50,8 +50,13 @@ centroid <- calcCentroid(FL_polyset, rollup = 1) %>%
 # Bind county centroids to Florida data
 FL_16@data <- cbind(FL_16@data, centroid)
 
+# Change rates into true rates by dividing by 100; also change some column types
 FL_16@data$county <- as.factor(FL_16@data$county)
+FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 2)
+FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 2)
+FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 2)
 
+# Rename dataframe for ease of use
 df_FL <- FL_16@data
 
 # Define UI for application that draws a histogram
@@ -68,6 +73,7 @@ ui <- fluidPage(
                     choices = unique(levels(FL_16@data$county))),
         
         # Input 2: x-variable
+        # CHOOSE A DEFAULT ****
         selectInput("var1", label = "Select a variable 1:", 
                     choices = c("Population" = "population",
                                 "Poverty Rate" = "poverty_rate",
@@ -83,6 +89,7 @@ ui <- fluidPage(
                                 )),
         
         # Input 3: y-variable
+        # CHOOSE A DEFAULT ****
         selectInput("var2", label = "Select a variable 2:", 
                     choices = c("Population" = "population",
                                 "Poverty Rate" = "poverty_rate",
@@ -95,24 +102,51 @@ ui <- fluidPage(
                                 "Eviction Filings" = "eviction_filings",
                                 "Evictions" = "evictions",
                                 "Eviction Rate" = "eviction_rate"
-                    ))
+                    )),
+        
+        helpText("See a data table of the top N counties with the highest eviction rates"),
+        numericInput(inputId = "topN",
+                     label = "Choose top N:",
+                     value = 10,
+                     min = 1, step = 1)
       ),
       
       # Show a plot of the generated distribution
       mainPanel(
-         plotlyOutput("scatter")
+        tabsetPanel(type= "tabs",
+          tabPanel("County-level Map"),
+          tabPanel("Housing Statistics",
+                   plotlyOutput("scatter"),
+                   DT::dataTableOutput("evic_rate"),
+                   DT::dataTableOutput("summStats"))
+        )
       )
    )
 )
 
 server <- function(input, output) {
   
+  # still need to make edits in case the user selects a rate (need to divide by 100)
   output$scatter <- renderPlotly(
     ggplotly(
       ggplot(data = FL_16@data) +
         geom_point(aes_string(x = input$var1, y = input$var2))
     )
   )
+  
+  df_FL_evic_rate <- df_FL %>% 
+    arrange(desc(eviction_rate))
+  
+  output$evic_rate <- DT::renderDataTable(
+    DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
+                  options = list(scrollX = TRUE))
+  )
+  
+  output$summStats <- DT::renderDataTable({
+    data.frame(unclass(summary(df_FL$evic_filing_rate)))
+  })
+
+  
 
 }
 

@@ -11,6 +11,7 @@ require(raptr)
 require(PBSmapping)
 require(ggplot2)
 require(plotly)
+library(knitr)
 
 # Load FL eviction data. Source: https://data-downloads.evictionlab.org/
 FL_counties <- readOGR("FL_eviction_counties.geojson")
@@ -60,3 +61,7 @@ max(test$eviction_rate, na.rm = T)
 # histogram
 ggplot(data = test) +
   geom_histogram(aes(x = median_gross_rent))
+
+# nicely formatted summary stats
+t <- data.frame(unclass(summary(test$evic_filing_rate)))
+t2 <- t(t)
