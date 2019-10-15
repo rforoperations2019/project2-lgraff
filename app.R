@@ -105,19 +105,24 @@ ui <- fluidPage(
                     )),
         
         helpText("See a data table of the top N counties with the highest eviction rates"),
+        helpText("(There are 67 total counties)"),
         numericInput(inputId = "topN",
                      label = "Choose top N:",
-                     value = 10,
-                     min = 1, step = 1)
+                     value = 67,
+                     min = 1, step = 1),
+        
+        checkboxInput("evics", "Include number of evictions on map", TRUE)
       ),
       
       # Show a plot of the generated distribution
       mainPanel(
         tabsetPanel(type= "tabs",
-          tabPanel("County-level Map"),
-          tabPanel("Housing Statistics",
+          tabPanel("County-level Map",
+                   leafletOutput("map")),
+          tabPanel("Exploratory Analysis",
                    plotlyOutput("scatter"),
-                   DT::dataTableOutput("evic_rate"),
+                   DT::dataTableOutput("evic_rate")),
+          tabPanel("Summary Statistics",
                    DT::dataTableOutput("summStats"))
         )
       )
@@ -134,18 +139,67 @@ server <- function(input, output) {
     )
   )
   
-  df_FL_evic_rate <- df_FL %>% 
-    arrange(desc(eviction_rate))
+  df_FL_top <- reactive({
+    df_FL %>% 
+      arrange(desc(input$var1)) %>% 
+      top_n(input$topN)
+  })
   
-  output$evic_rate <- DT::renderDataTable(
-    DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
-                  options = list(scrollX = TRUE))
-  )
+  # output$evic_rate <- DT::renderDataTable(
+  #   DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
+  #                 options = list(scrollX = TRUE))
+  # )
   
   output$summStats <- DT::renderDataTable({
     data.frame(unclass(summary(df_FL$evic_filing_rate)))
   })
+  
+  # Create base map
+  output$map <- renderLeaflet({
+    leaflet() %>%
+      addProviderTiles(providers$OpenStreetMap, group = "Open Street")
+  })
+  
+  # Create a reactive palette for the selected input
+  qpal <- reactive({
+    colorQuantile("Blues", df_FL[[input$var1]], n = 5)
+  })
+  
+  # Redraw map, colored by selected variable
+  observe({
+    color_pal <- qpal()
+  
+    leafletProxy("map") %>% 
+      clearShapes() %>% 
+      addPolygons(data = FL_16,
+                  weight = 1,
+                  smoothFactor = .2,
+                  fillOpacity = .8,
+                  fillColor = ~color_pal(df_FL[[input$var1]])
+      )
+    # ADD LEGEND
+  })
+  
+  # Include marker for number of evictions, as per user input
+  observe({
+    leafletProxy("map") %>%
+      clearMarkers()
 
+    if (input$evics == TRUE) {
+        leafletProxy("map") %>% 
+        addCircleMarkers(data = df_FL, lat = ~lat, lng = ~long,
+                         radius = ~log(evictions),
+                         popup = ~as.character(evictions),
+                         color = "red")
+    }
+  })
+ 
+  
+  # Redraw map, to only view the top N
+ # observe({
+  #  leafletProxy()
+  #})
+    
   
 
 }

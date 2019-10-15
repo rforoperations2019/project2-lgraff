@@ -15,14 +15,14 @@ library(knitr)
 
 # Load FL eviction data. Source: https://data-downloads.evictionlab.org/
 FL_counties <- readOGR("FL_eviction_counties.geojson")
-View(FL_counties@data)
+#View(FL_counties@data)
 FL_16 <- FL_counties
 
 # Select only 2016 data and rename columns
 FL_16@data <- FL_counties@data %>% 
   dplyr::select(GEOID, west, east, north, south, n, pl, ends_with("16")) %>% 
   rename(county = n, state = pl)
-View(FL_16@data)
+#View(FL_16@data)
 colnames(FL_16@data) <- c("GEOID", "west", "east", "north", "south", "county", "state",
                           "population", "poverty_rate", "renter_occ_households", "pct_renter",
                           "median_gross_rent", "median_income", "median_property_val",
@@ -45,7 +45,8 @@ View(FL_16@data)
 sapply(FL_16@data, typeof)
 FL_16@data$county <- as.factor(FL_16@data$county)
 
-test <- FL_16@data
+df_FL <- FL_16@data
+
 # Plots
 # scatterplot
 ggplotly(
@@ -65,3 +66,9 @@ ggplot(data = test) +
 # nicely formatted summary stats
 t <- data.frame(unclass(summary(test$evic_filing_rate)))
 t2 <- t(t)
+
+ev <- df_FL[["evictions"]]
+
+df_FL_top <- df_FL %>% 
+    arrange(desc(median_income)) %>% 
+    top_n(10)
