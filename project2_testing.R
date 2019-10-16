@@ -50,9 +50,14 @@ df_FL <- FL_16@data
 # Plots
 # scatterplot
 ggplotly(
-  ggplot(data = test) +
-    geom_point(aes(x = median_gross_rent, y = eviction_rate/100)) 
-)
+  ggplot(data = df_FL, aes(county = county)) +
+    geom_point(aes(x = median_gross_rent, y = eviction_rate/100)),
+  tooltip = c("county")
+) 
+
+g <- ggplot(data = df_FL, aes(county = county)) +
+  geom_point(aes(x = median_gross_rent, y = eviction_rate/100))
+ggplotly(g, tooltip = c("county")) 
 
 ggplot(data = test) +
   geom_point(aes(x = median_property_val, y = median_income))
@@ -64,7 +69,9 @@ ggplot(data = test) +
   geom_histogram(aes(x = median_gross_rent))
 
 # nicely formatted summary stats
-t <- data.frame(unclass(summary(test$evic_filing_rate)))
+t <- round(data.frame(unclass(summary(df_FL$evic_filing_rate))), 3)
+colnames(t) <- c("evic_filing_rate")
+
 t2 <- t(t)
 
 ev <- df_FL[["evictions"]]

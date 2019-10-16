@@ -1,10 +1,4 @@
-#
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
-#
-# Find out more about building applications with Shiny here:
-#
-#    http://shiny.rstudio.com/
+# This research uses data from The Eviction Lab at Princeton University, a project directed by Matthew Desmond and designed by Ashley Gromis, Lavar Edmonds, James Hendrickson, Katie Krywokulski, Lillian Leung, and Adam Porton. The Eviction Lab is funded by the JPB, Gates, and Ford Foundations as well as the Chan Zuckerberg Initiative. More information is found at evictionlab.org.
 #
 
 library(shiny)
@@ -52,9 +46,9 @@ FL_16@data <- cbind(FL_16@data, centroid)
 
 # Change rates into true rates by dividing by 100; also change some column types
 FL_16@data$county <- as.factor(FL_16@data$county)
-FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 2)
-FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 2)
-FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 2)
+FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 4)
+FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 4)
+FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 4)
 
 # Rename dataframe for ease of use
 df_FL <- FL_16@data
@@ -63,18 +57,16 @@ df_FL <- FL_16@data
 ui <- fluidPage(
    
    # Application title
-   titlePanel("Florida Housing Data"),
+   titlePanel("Florida Eviction and Housing Data"),
    
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-        # Input 1: county
-        selectInput("county", label = "Select a county:", 
-                    choices = unique(levels(FL_16@data$county))),
-        
-        # Input 2: x-variable
-        # CHOOSE A DEFAULT ****
-        selectInput("var1", label = "Select a variable 1:", 
+
+        # Input 1: variable of interest
+        helpText("The variable of interest will be used for the heatmap, scatterplot,
+                 and summary statistics"),
+        selectInput("var1", label = "Select a variable of interest:", 
                     choices = c("Population" = "population",
                                 "Poverty Rate" = "poverty_rate",
                                 "Renter Occupied Housholds" = "renter_occ_households",
@@ -86,44 +78,38 @@ ui <- fluidPage(
                                 "Eviction Filings" = "eviction_filings",
                                 "Evictions" = "evictions",
                                 "Eviction Rate" = "eviction_rate"
-                                )),
+                                ),
+                    selected = "Median Property Value"),
+        br(),
         
-        # Input 3: y-variable
-        # CHOOSE A DEFAULT ****
-        selectInput("var2", label = "Select a variable 2:", 
-                    choices = c("Population" = "population",
-                                "Poverty Rate" = "poverty_rate",
-                                "Renter Occupied Housholds" = "renter_occ_households",
-                                "Percent Renter" = "pct_renter",
-                                "Median Gross Rent" = "median_gross_rent",
-                                "Median Income" = "median_income",
-                                "Median Property Value" = "median_property_val",
-                                "Rent Burden" = "rent_burden",
-                                "Eviction Filings" = "eviction_filings",
-                                "Evictions" = "evictions",
-                                "Eviction Rate" = "eviction_rate"
-                    )),
-        
-        helpText("See a data table of the top N counties with the highest eviction rates"),
+        # Input 2: top N counties
+        # for the data table and potentially the map
+        helpText("See a data table of the top N counties, sorted by the metric
+                 you have selected above"),
         helpText("(There are 67 total counties)"),
         numericInput(inputId = "topN",
                      label = "Choose top N:",
-                     value = 67,
+                     value = 10,
                      min = 1, step = 1),
         
+        br(),
+        # Input 3: whether the user wants to include the number of evictions
         checkboxInput("evics", "Include number of evictions on map", TRUE)
       ),
       
-      # Show a plot of the generated distribution
+      # Organize output into three tabs
       mainPanel(
         tabsetPanel(type= "tabs",
           tabPanel("County-level Map",
                    leafletOutput("map")),
           tabPanel("Exploratory Analysis",
+                   br(),
+                   p("Hover over each point to see the numbers along with the
+                     associated county"),
                    plotlyOutput("scatter"),
                    DT::dataTableOutput("evic_rate")),
           tabPanel("Summary Statistics",
-                   DT::dataTableOutput("summStats"))
+                   tableOutput("summStats"))
         )
       )
    )
@@ -131,33 +117,43 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-  # still need to make edits in case the user selects a rate (need to divide by 100)
-  output$scatter <- renderPlotly(
-    ggplotly(
-      ggplot(data = FL_16@data) +
-        geom_point(aes_string(x = input$var1, y = input$var2))
-    )
-  )
-  
   df_FL_top <- reactive({
     df_FL %>% 
       arrange(desc(input$var1)) %>% 
       top_n(input$topN)
   })
   
+  # Plot of eviction rate by selected user input
+  # User can hover over each point to see the associated county
+  output$scatter <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_FL, aes(county = county)) +
+        geom_point(aes_string(x = input$var1, y = "eviction_rate")),
+      tooltip = c("county", input$var1, "eviction_rate")
+    )
+  )
+  
+
+  
   # output$evic_rate <- DT::renderDataTable(
   #   DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
   #                 options = list(scrollX = TRUE))
   # )
   
-  output$summStats <- DT::renderDataTable({
-    data.frame(unclass(summary(df_FL$evic_filing_rate)))
+  stats <- reactive({
+    round(data.frame(unclass(summary(df_FL[[input$var1]]))), 3) 
+    colnames()
   })
+  
+  output$summStats <- renderTable({
+    stats()
+  }, include.rownames = TRUE)
   
   # Create base map
   output$map <- renderLeaflet({
     leaflet() %>%
-      addProviderTiles(providers$OpenStreetMap, group = "Open Street")
+      addProviderTiles(providers$OpenStreetMap, group = "Open Street") %>% 
+      fitBounds()
   })
   
   # Create a reactive palette for the selected input
@@ -171,13 +167,15 @@ server <- function(input, output) {
   
     leafletProxy("map") %>% 
       clearShapes() %>% 
+      clearControls() %>% 
       addPolygons(data = FL_16,
                   weight = 1,
                   smoothFactor = .2,
                   fillOpacity = .8,
                   fillColor = ~color_pal(df_FL[[input$var1]])
-      )
-    # ADD LEGEND
+      ) %>% 
+      addLegend(title = input$var1, pal = color_pal, values = df_FL[[input$var1]],
+                opacity = 1)
   })
   
   # Include marker for number of evictions, as per user input
