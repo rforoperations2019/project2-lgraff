@@ -113,7 +113,10 @@ ui <- fluidPage(
                    plotlyOutput("scatter"),
                    DT::dataTableOutput("evic_rate")),
           tabPanel("Summary Statistics",
-                  plotlyOutput("box"))
+                   br(),
+                   p("Compare two boxplots of the selected input, separated by counties with 
+                     above average vs. below average number of evictions"),
+                   plotlyOutput("box"))
                    #tableOutput("summStats"))
         )
       )
@@ -176,12 +179,13 @@ server <- function(input, output) {
   # Create base map
   output$map <- renderLeaflet({
     leaflet() %>%
-      addProviderTiles(providers$OpenStreetMap, group = "Open Street") 
-    #%>% 
-      #fitBounds()
+      addProviderTiles(providers$OpenStreetMap, group = "Open Street") %>% 
+      fitBounds(lng1 = min(df_FL$long), lat1 = min(df_FL$lat),
+                lng2 = max(df_FL$long), lat2 = max(df_FL$lat))
+      #setView(lng = mean(df_FL$long), lat = mean(df_FL$lat), zoom = 2)
   })
   
-  # Create a reactive palette for the selected input
+  # Create a reactive palette for the elected input
   qpal <- reactive({
     colorQuantile("Blues", df_FL[[input$var1]], n = 5)
   })
