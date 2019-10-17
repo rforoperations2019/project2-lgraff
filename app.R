@@ -50,6 +50,10 @@ FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 4)
 FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 4)
 FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 4)
 
+# Add indicator if county has # evictions greater than the mean
+FL_16@data <- FL_16@data %>% 
+  mutate(above_avg_evic = ifelse(evictions > mean(evictions, na.rm = TRUE),
+                                 "Above Average", "Below Average"))
 # Rename dataframe for ease of use
 df_FL <- FL_16@data
 
@@ -109,7 +113,8 @@ ui <- fluidPage(
                    plotlyOutput("scatter"),
                    DT::dataTableOutput("evic_rate")),
           tabPanel("Summary Statistics",
-                   tableOutput("summStats"))
+                  plotlyOutput("box"))
+                   #tableOutput("summStats"))
         )
       )
    )
@@ -132,8 +137,27 @@ server <- function(input, output) {
       tooltip = c("county", input$var1, "eviction_rate")
     )
   )
-  
+ 
+  # Boxplot of selected user input, fill by above vs. below average # evictions
+  df_boxinput <- reactive({
+    df_FL %>% 
+      select(input$var1, above_avg_evic) %>% 
+      filter(!is.na(above_avg_evic))
+  })
 
+  
+  output$box <- renderPlotly(
+    ggplotly(
+      ggplot(data = df_boxinput(), aes_string(x = "above_avg_evic", 
+                                              y = input$var1, fill = "above_avg_evic")) +
+        geom_boxplot() + 
+        coord_flip() +
+        theme(axis.title.y = element_blank(),
+              axis.text.y = element_blank(),
+              axis.ticks.y = element_blank()) +
+        guides(fill = guide_legend("Number of Evictions"))
+    )
+  )
   
   # output$evic_rate <- DT::renderDataTable(
   #   DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
@@ -152,8 +176,9 @@ server <- function(input, output) {
   # Create base map
   output$map <- renderLeaflet({
     leaflet() %>%
-      addProviderTiles(providers$OpenStreetMap, group = "Open Street") %>% 
-      fitBounds()
+      addProviderTiles(providers$OpenStreetMap, group = "Open Street") 
+    #%>% 
+      #fitBounds()
   })
   
   # Create a reactive palette for the selected input

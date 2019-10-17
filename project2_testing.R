@@ -31,6 +31,7 @@ colnames(FL_16@data) <- c("GEOID", "west", "east", "north", "south", "county", "
                           "eviction_filings", "evictions", "eviction_rate", "evic_filing_rate",
                           "low_flag", "imputed", "sub")
 
+
 # Add lat and long to the dataset
 # Calculate centroids of counties to find lat and long
 FL_polyset <- SpatialPolygons2PolySet(x = FL_16)
@@ -39,11 +40,16 @@ centroid <- calcCentroid(FL_polyset, rollup = 1) %>%
 
 # Bind county centroids to Florida data
 FL_16@data <- cbind(FL_16@data, centroid)
-View(FL_16@data)
+#View(FL_16@data)
 
 # Data types
-sapply(FL_16@data, typeof)
+#sapply(FL_16@data, typeof)
 FL_16@data$county <- as.factor(FL_16@data$county)
+
+# add indicator if county has # evictions greater than the mean
+FL_16@data <- FL_16@data %>% 
+  mutate(above_avg_evic = ifelse(evictions > mean(evictions, na.rm = TRUE),
+                                 "Above Average", "Below Average"))
 
 df_FL <- FL_16@data
 
@@ -54,6 +60,23 @@ ggplotly(
     geom_point(aes(x = median_gross_rent, y = eviction_rate/100)),
   tooltip = c("county")
 ) 
+
+test1 <- df_FL %>% 
+  select(population, above_avg_evic) %>% 
+  filter(!is.na(above_avg_evic))
+
+
+ggplotly(
+  ggplot(test1, aes_string(x = "above_avg_evic", y = "population", fill = "above_avg_evic")) +
+    geom_boxplot() + 
+    coord_flip() +
+    theme(axis.title.y = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank()) +
+    guides(fill = guide_legend("Number of Evictions"))
+)
+
+
 
 g <- ggplot(data = df_FL, aes(county = county)) +
   geom_point(aes(x = median_gross_rent, y = eviction_rate/100))
