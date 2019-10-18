@@ -146,7 +146,7 @@ server <- function(input, output) {
     )
   )
   
-  # Correlation between number of evictions and selected input
+  # Correlation between number of evictions and selected input 
   output$corr <- renderText({
     correlation <- as.character(round(cor(x = df_FL$evictions, y = df_FL[[input$var1]], 
                                           use = "complete.obs"), 2))
