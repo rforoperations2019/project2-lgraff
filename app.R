@@ -73,6 +73,7 @@ ui <- fluidPage(
         # Input 1: county
         selectInput("county", label = "Select a county",
                     choices = unique(df_FL$county)),
+        br(),
     
         # Input 2: variable of interest
         helpText("The variable of interest will be used for the heatmap, scatterplot,
@@ -94,10 +95,11 @@ ui <- fluidPage(
         br(),
         
         # Input 3: whether the user wants to include the number of evictions
-        checkboxInput("evics", "Include number of evictions on map", TRUE)
+        checkboxInput("evics", "Include number of evictions on map", TRUE),
+        helpText("The size of the red circle on the map scales with the number of evictions")
       ),
       
-      # Organize output into three tabs
+      # Organize output into four tabs
       mainPanel(
         tabsetPanel(type= "tabs",
           tabPanel("County-level Map",
@@ -119,9 +121,9 @@ ui <- fluidPage(
                    plotlyOutput("box")),
           tabPanel("Raw Data",
                    br(),
+                   p("To download the dataset, click the button below"),                   
                    p("Below is the data table used for the map and plots"),
-                   p("To download the dataset, click the button below")
-                   
+                   DT::dataTableOutput("dt")
           )
         )
       )
@@ -153,7 +155,7 @@ server <- function(input, output) {
     paste("The correlation between the number of evictions and ", input$var1, "is", correlation)
   })
  
-  # Boxplot of selected user input, fill by above vs. below average # evictions
+  # Boxplot of selected user input, fill by above vs. below average number of evictions
   df_boxinput <- reactive({
     df_FL %>% 
       select(input$var1, above_avg_evic) %>% 
@@ -169,14 +171,16 @@ server <- function(input, output) {
         theme(axis.title.y = element_blank(),
               axis.text.y = element_blank(),
               axis.ticks.y = element_blank()) +
+        ggtitle(paste("Number of Evictions vs"), input$var1) +
         guides(fill = guide_legend("Number of Evictions"))
     )
   )
   
-  # output$evic_rate <- DT::renderDataTable(
-  #   DT::datatable(data = df_FL_evic_rate[1:input$topN, ],
-  #                 options = list(scrollX = TRUE))
-  # )
+  # Data table for the data used 
+  output$dt <- DT::renderDataTable(
+    DT::datatable(data = df_FL[,c(6:36)],
+                  options = list(scrollX = TRUE))
+  )
   
   
   # Map Instructions
@@ -200,7 +204,7 @@ server <- function(input, output) {
     colorQuantile("Blues", df_FL[[input$var1]], n = 5, na.color = "white")
   })
 
-  # Redraw map, colored by selected variable
+  # Redraw map, colored by selected variable, highlighted by county
   observe({
     color_pal <- qpal()
     county <- countySelect()
@@ -208,6 +212,7 @@ server <- function(input, output) {
     leafletProxy("map") %>%
       clearShapes() %>%
       clearControls() %>%
+      clearMarkers() %>% 
       addPolygons(data = FL_16,
                   weight = 1,
                   smoothFactor = .2,
@@ -215,24 +220,16 @@ server <- function(input, output) {
                   fillColor = ~color_pal(df_FL[[input$var1]])) %>%
       addLegend(title = input$var1, pal = color_pal, values = df_FL[[input$var1]],
                 opacity = 1) %>%
-      addPolygons(data = county, color = "yellow", weight = 5, stroke = TRUE,
-                  highlightOptions = highlightOptions(weight = 5, bringToFront = TRUE))
-  })
-
-  # Include marker for number of evictions, as per user input
-  # Display popup revealing the county name and number of evictions
-  observe({
-    leafletProxy("map") %>%
-      clearMarkers()
-
+      addPolygons(data = county, color = "yellow", weight = 5, stroke = TRUE)
+    
     if (input$evics == TRUE) {
-        leafletProxy("map") %>%
+      leafletProxy("map") %>%
         addCircleMarkers(data = df_FL, lat = ~lat, lng = ~long,
                          radius = ~log(evictions),
                          popup = ~paste(county, "<br>",
                                         "Number of evictions:", as.character(evictions)),
                          color = "red")
-     }
+    }
   })
 
 }
