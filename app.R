@@ -1,5 +1,9 @@
-# This research uses data from The Eviction Lab at Princeton University, a project directed by Matthew Desmond and designed by Ashley Gromis, Lavar Edmonds, James Hendrickson, Katie Krywokulski, Lillian Leung, and Adam Porton. The Eviction Lab is funded by the JPB, Gates, and Ford Foundations as well as the Chan Zuckerberg Initiative. More information is found at evictionlab.org.
-#
+# This research uses data from The Eviction Lab at Princeton University, 
+# a project directed by Matthew Desmond and designed by Ashley Gromis, Lavar Edmonds, 
+# James Hendrickson, Katie Krywokulski, Lillian Leung, and Adam Porton. The Eviction Lab is
+# funded by the JPB, Gates, and Ford Foundations as well as the Chan Zuckerberg Initiative. 
+# More information is found at evictionlab.org.
+
 
 library(shiny)
 
@@ -29,6 +33,7 @@ FL_16 <- FL_counties
 FL_16@data <- FL_counties@data %>% 
   dplyr::select(GEOID, west, east, north, south, n, pl, ends_with("16")) %>% 
   rename(county = n, state = pl)
+
 colnames(FL_16@data) <- c("GEOID", "west", "east", "north", "south", "county", "state",
                           "population", "poverty_rate", "renter_occupied_households", "pct_renter",
                           "median_gross_rent", "median_income", "median_property_value",
@@ -51,8 +56,8 @@ FL_16@data$county <- as.factor(FL_16@data$county)
 FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 4)
 FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 4)
 FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 4)
-FL_16@data$renter_occ_households <- as.numeric(FL_16@data$median_property_val)
-FL_16@data$median_property_val <- as.numeric(FL_16@data$median_property_val)
+FL_16@data$renter_occupied_households <- as.numeric(FL_16@data$renter_occupied_households)
+FL_16@data$median_property_value <- as.numeric(FL_16@data$median_property_value)
 
 # Add indicator if county has # evictions greater than the mean, for use in boxplot
 FL_16@data <- FL_16@data %>% 
@@ -62,7 +67,7 @@ FL_16@data <- FL_16@data %>%
 # Rename dataframe for ease of use, and alphabetize
 df_FL <- FL_16@data %>% arrange(county)
 
-# Define UI for application that draws a histogram
+# Define UI for application
 ui <- fluidPage(
    
    # Application title
@@ -83,17 +88,17 @@ ui <- fluidPage(
         selectInput("var1", label = "Select a variable of interest:", 
                     choices = c("Population" = "population",
                                 "Poverty Rate" = "poverty_rate",
-                                "Renter Occupied Housholds" = "renter_occ_households",
+                                "Renter Occupied Housholds" = "renter_occupied_households",
                                 "Percent Renter" = "pct_renter",
                                 "Median Gross Rent" = "median_gross_rent",
                                 "Median Income" = "median_income",
-                                "Median Property Value" = "median_property_val",
+                                "Median Property Value" = "median_property_value",
                                 "Rent Burden" = "rent_burden",
                                 "Eviction Filings" = "eviction_filings",
                                 "Evictions" = "evictions",
                                 "Eviction Rate" = "eviction_rate"
                                 ),
-                    selected = "Median Property Value"),
+                    selected = "median_property_value"),
         br(),
         
         # Input 3: whether the user wants to include the number of evictions
@@ -105,6 +110,7 @@ ui <- fluidPage(
       mainPanel(
         tabsetPanel(type= "tabs",
           tabPanel("County-level Map",
+                   br(),
                    p("The map of Florida below is delineated by county. It will change
                      into a heatmap determined by five percentile groups of the variable you 
                      selected."),
@@ -162,7 +168,8 @@ server <- function(input, output) {
   output$corr <- renderText({
     correlation <- as.character(round(cor(x = df_FL$eviction_rate, y = df_FL[[input$var1]], 
                                           use = "complete.obs"), 2))
-    paste("The correlation between the eviction rate and ", input$var1, "is", correlation)
+    paste("The correlation between the eviction rate and ", str_replace_all(input$var1, "_", " "),
+          "is", correlation)
   })
  
   # Boxplot of selected user input, fill by above vs. below average number of evictions
@@ -221,7 +228,8 @@ server <- function(input, output) {
   
   # Create a reactive palette for the selected input
   qpal <- reactive({
-    colorQuantile("Blues", df_FL[[input$var1]], n = 5, na.color = "white")
+    colorQuantile("Blues", domain = df_FL[[input$var1]],
+                  n = 5, na.color = "white")
   })
 
   # Redraw map, colored by selected variable, highlighted by county
@@ -238,7 +246,8 @@ server <- function(input, output) {
                   smoothFactor = .2,
                   fillOpacity = .8,
                   fillColor = ~color_pal(df_FL[[input$var1]])) %>%
-      addLegend(title = paste(input$var1, "percentile"), pal = color_pal,
+      addLegend(title = paste(str_replace_all(input$var1, "_", " "), "percentile"),
+                pal = color_pal,
                 values = df_FL[[input$var1]], opacity = 1,
                 position = c("bottomleft")) %>% 
       addPolygons(data = county, color = "yellow", weight = 5, stroke = TRUE)
