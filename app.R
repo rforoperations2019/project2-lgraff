@@ -16,6 +16,8 @@ require(raptr)
 require(PBSmapping)
 library(ggplot2)
 library(plotly)
+library(stringr)
+library(tools)
 
 # Data preparation
 
@@ -103,7 +105,13 @@ ui <- fluidPage(
       mainPanel(
         tabsetPanel(type= "tabs",
           tabPanel("County-level Map",
-                   p("MAP DIRECTIONS"),
+                   p("The map of Florida below is delineated by county. It will change
+                     into a heatmap determined by five percentile groups of the variable you 
+                     selected."),
+                   p("You can also choose to display a red circle 
+                     that scales with the number of evictions for each county. If you click 
+                     the circle, you will see a popup that shows the number."),
+                   p("When you select a county, it will appear highlighted in yellow."),
                    leafletOutput("map")),
           tabPanel("Exploratory Analysis",
                    br(),
@@ -143,16 +151,18 @@ server <- function(input, output) {
     ggplotly(
       ggplot(data = df_FL, aes(county = county)) +
         geom_point(aes_string(x = input$var1, y = "eviction_rate"), color = "blue") +
-        ggtitle(paste("Number of Evictions vs", input$var1)),
+        ggtitle(paste("Eviction rate vs", toTitleCase(str_replace_all(input$var1, "_", " ")))) +
+        labs(x = toTitleCase(str_replace_all(input$var1, "_", " ")),
+             y = "Eviction Rate"),
       tooltip = c("county", input$var1, "eviction_rate")
     )
   )
   
-  # Correlation between number of evictions and selected input 
+  # Correlation between eviction rate and selected input 
   output$corr <- renderText({
-    correlation <- as.character(round(cor(x = df_FL$evictions, y = df_FL[[input$var1]], 
+    correlation <- as.character(round(cor(x = df_FL$eviction_rate, y = df_FL[[input$var1]], 
                                           use = "complete.obs"), 2))
-    paste("The correlation between the number of evictions and ", input$var1, "is", correlation)
+    paste("The correlation between the eviction rate and ", input$var1, "is", correlation)
   })
  
   # Boxplot of selected user input, fill by above vs. below average number of evictions
@@ -185,7 +195,7 @@ server <- function(input, output) {
     }
   )
   
-  # Data table for the data used 
+  # Data table rendering. Do not include geo identifying columns
   output$dt <- DT::renderDataTable(
     DT::datatable(data = df_FL[,c(6:36)],
                   options = list(scrollX = TRUE),
@@ -228,8 +238,9 @@ server <- function(input, output) {
                   smoothFactor = .2,
                   fillOpacity = .8,
                   fillColor = ~color_pal(df_FL[[input$var1]])) %>%
-      addLegend(title = input$var1, pal = color_pal, values = df_FL[[input$var1]],
-                opacity = 1) %>%
+      addLegend(title = paste(input$var1, "percentile"), pal = color_pal,
+                values = df_FL[[input$var1]], opacity = 1,
+                position = c("bottomleft")) %>% 
       addPolygons(data = county, color = "yellow", weight = 5, stroke = TRUE)
     
     if (input$evics == TRUE) {
