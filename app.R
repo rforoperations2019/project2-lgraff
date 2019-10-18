@@ -28,8 +28,8 @@ FL_16@data <- FL_counties@data %>%
   dplyr::select(GEOID, west, east, north, south, n, pl, ends_with("16")) %>% 
   rename(county = n, state = pl)
 colnames(FL_16@data) <- c("GEOID", "west", "east", "north", "south", "county", "state",
-                          "population", "poverty_rate", "renter_occ_households", "pct_renter",
-                          "median_gross_rent", "median_income", "median_property_val",
+                          "population", "poverty_rate", "renter_occupied_households", "pct_renter",
+                          "median_gross_rent", "median_income", "median_property_value",
                           "rent_burden", "pct_white", "pct_af_am", "pct_hispanic", "pct_am_ind",
                           "pct_asian", "pct_nh", "pct_multiple", "pct_other", 
                           "eviction_filings", "evictions", "eviction_rate", "evic_filing_rate",
@@ -49,13 +49,16 @@ FL_16@data$county <- as.factor(FL_16@data$county)
 FL_16@data$eviction_rate <- round(FL_16@data$eviction_rate/100, 4)
 FL_16@data$poverty_rate <- round(FL_16@data$poverty_rate/100, 4)
 FL_16@data$evic_filing_rate <- round(FL_16@data$evic_filing_rate/100, 4)
+FL_16@data$renter_occ_households <- as.numeric(FL_16@data$median_property_val)
+FL_16@data$median_property_val <- as.numeric(FL_16@data$median_property_val)
 
-# Add indicator if county has # evictions greater than the mean
+# Add indicator if county has # evictions greater than the mean, for use in boxplot
 FL_16@data <- FL_16@data %>% 
   mutate(above_avg_evic = ifelse(evictions > mean(evictions, na.rm = TRUE),
                                  "Above Average", "Below Average"))
-# Rename dataframe for ease of use
-df_FL <- FL_16@data
+
+# Rename dataframe for ease of use, and alphabetize
+df_FL <- FL_16@data %>% arrange(county)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -63,11 +66,15 @@ ui <- fluidPage(
    # Application title
    titlePanel("Florida Eviction and Housing Data"),
    
-   # Sidebar with a slider input for number of bins 
+   # Sidebar
    sidebarLayout(
       sidebarPanel(
 
-        # Input 1: variable of interest
+        # Input 1: county
+        selectInput("county", label = "Select a county",
+                    choices = unique(df_FL$county)),
+    
+        # Input 2: variable of interest
         helpText("The variable of interest will be used for the heatmap, scatterplot,
                  and summary statistics"),
         selectInput("var1", label = "Select a variable of interest:", 
@@ -86,17 +93,6 @@ ui <- fluidPage(
                     selected = "Median Property Value"),
         br(),
         
-        # Input 2: top N counties
-        # for the data table and potentially the map
-        helpText("See a data table of the top N counties, sorted by the metric
-                 you have selected above"),
-        helpText("(There are 67 total counties)"),
-        numericInput(inputId = "topN",
-                     label = "Choose top N:",
-                     value = 10,
-                     min = 1, step = 1),
-        
-        br(),
         # Input 3: whether the user wants to include the number of evictions
         checkboxInput("evics", "Include number of evictions on map", TRUE)
       ),
@@ -105,19 +101,28 @@ ui <- fluidPage(
       mainPanel(
         tabsetPanel(type= "tabs",
           tabPanel("County-level Map",
+                   p("MAP DIRECTIONS"),
                    leafletOutput("map")),
           tabPanel("Exploratory Analysis",
                    br(),
                    p("Hover over each point to see the numbers along with the
                      associated county"),
                    plotlyOutput("scatter"),
-                   DT::dataTableOutput("evic_rate")),
+                   DT::dataTableOutput("evic_rate"),
+                   br(),
+                   h4("Correlation"),
+                   textOutput("corr")),
           tabPanel("Summary Statistics",
                    br(),
                    p("Compare two boxplots of the selected input, separated by counties with 
                      above average vs. below average number of evictions"),
-                   plotlyOutput("box"))
-                   #tableOutput("summStats"))
+                   plotlyOutput("box")),
+          tabPanel("Raw Data",
+                   br(),
+                   p("Below is the data table used for the map and plots"),
+                   p("To download the dataset, click the button below")
+                   
+          )
         )
       )
    )
@@ -125,13 +130,13 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-  df_FL_top <- reactive({
-    df_FL %>% 
-      arrange(desc(input$var1)) %>% 
-      top_n(input$topN)
-  })
+  # df_FL_top <- reactive({
+  #   df_FL %>% 
+  #     arrange(desc(input$var1)) %>% 
+  #     top_n(input$topN)
+  # })
   
-  # Plot of eviction rate by selected user input
+  # Plot of eviction rate vs selected user input
   # User can hover over each point to see the associated county
   output$scatter <- renderPlotly(
     ggplotly(
@@ -140,6 +145,13 @@ server <- function(input, output) {
       tooltip = c("county", input$var1, "eviction_rate")
     )
   )
+  
+  # Correlation between number of evictions and selected input
+  output$corr <- renderText({
+    correlation <- as.character(round(cor(x = df_FL$evictions, y = df_FL[[input$var1]], 
+                                          use = "complete.obs"), 2))
+    paste("The correlation between the number of evictions and ", input$var1, "is", correlation)
+  })
  
   # Boxplot of selected user input, fill by above vs. below average # evictions
   df_boxinput <- reactive({
@@ -148,7 +160,6 @@ server <- function(input, output) {
       filter(!is.na(above_avg_evic))
   })
 
-  
   output$box <- renderPlotly(
     ggplotly(
       ggplot(data = df_boxinput(), aes_string(x = "above_avg_evic", 
@@ -167,67 +178,62 @@ server <- function(input, output) {
   #                 options = list(scrollX = TRUE))
   # )
   
-  stats <- reactive({
-    round(data.frame(unclass(summary(df_FL[[input$var1]]))), 3) 
-    colnames()
-  })
   
-  output$summStats <- renderTable({
-    stats()
-  }, include.rownames = TRUE)
-  
+  # Map Instructions
   # Create base map
   output$map <- renderLeaflet({
     leaflet() %>%
       addProviderTiles(providers$OpenStreetMap, group = "Open Street") %>% 
       fitBounds(lng1 = min(df_FL$long), lat1 = min(df_FL$lat),
                 lng2 = max(df_FL$long), lat2 = max(df_FL$lat))
-      #setView(lng = mean(df_FL$long), lat = mean(df_FL$lat), zoom = 2)
   })
   
-  # Create a reactive palette for the elected input
+  # Highlight the selected county
+  countySelect <- reactive({
+    cnty <- subset(FL_16, county == input$county)
+    
+    return(cnty)
+  })
+  
+  # Create a reactive palette for the selected input
   qpal <- reactive({
-    colorQuantile("Blues", df_FL[[input$var1]], n = 5)
+    colorQuantile("Blues", df_FL[[input$var1]], n = 5, na.color = "white")
   })
-  
+
   # Redraw map, colored by selected variable
   observe({
     color_pal <- qpal()
-  
-    leafletProxy("map") %>% 
-      clearShapes() %>% 
-      clearControls() %>% 
+    county <- countySelect()
+
+    leafletProxy("map") %>%
+      clearShapes() %>%
+      clearControls() %>%
       addPolygons(data = FL_16,
                   weight = 1,
                   smoothFactor = .2,
                   fillOpacity = .8,
-                  fillColor = ~color_pal(df_FL[[input$var1]])
-      ) %>% 
+                  fillColor = ~color_pal(df_FL[[input$var1]])) %>%
       addLegend(title = input$var1, pal = color_pal, values = df_FL[[input$var1]],
-                opacity = 1)
+                opacity = 1) %>%
+      addPolygons(data = county, color = "yellow", weight = 5, stroke = TRUE,
+                  highlightOptions = highlightOptions(weight = 5, bringToFront = TRUE))
   })
-  
+
   # Include marker for number of evictions, as per user input
+  # Display popup revealing the county name and number of evictions
   observe({
     leafletProxy("map") %>%
       clearMarkers()
 
     if (input$evics == TRUE) {
-        leafletProxy("map") %>% 
+        leafletProxy("map") %>%
         addCircleMarkers(data = df_FL, lat = ~lat, lng = ~long,
                          radius = ~log(evictions),
-                         popup = ~as.character(evictions),
+                         popup = ~paste(county, "<br>",
+                                        "Number of evictions:", as.character(evictions)),
                          color = "red")
-    }
+     }
   })
- 
-  
-  # Redraw map, to only view the top N
- # observe({
-  #  leafletProxy()
-  #})
-    
-  
 
 }
 
