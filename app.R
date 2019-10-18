@@ -121,8 +121,13 @@ ui <- fluidPage(
                    plotlyOutput("box")),
           tabPanel("Raw Data",
                    br(),
-                   p("To download the dataset, click the button below"),                   
-                   p("Below is the data table used for the map and plots"),
+                   p("To download the dataset, click the button below"),
+                   downloadLink("downloadData", "Download"),
+                   br(),
+                   br(),
+                   p("Below is the data table used for the map and plots,
+                     alphabetized by county"),
+                   br(),
                    DT::dataTableOutput("dt")
           )
         )
@@ -132,18 +137,13 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-  # df_FL_top <- reactive({
-  #   df_FL %>% 
-  #     arrange(desc(input$var1)) %>% 
-  #     top_n(input$topN)
-  # })
-  
   # Plot of eviction rate vs selected user input
   # User can hover over each point to see the associated county
   output$scatter <- renderPlotly(
     ggplotly(
       ggplot(data = df_FL, aes(county = county)) +
-        geom_point(aes_string(x = input$var1, y = "eviction_rate")),
+        geom_point(aes_string(x = input$var1, y = "eviction_rate"), color = "blue") +
+        ggtitle(paste("Number of Evictions vs", input$var1)),
       tooltip = c("county", input$var1, "eviction_rate")
     )
   )
@@ -171,15 +171,25 @@ server <- function(input, output) {
         theme(axis.title.y = element_blank(),
               axis.text.y = element_blank(),
               axis.ticks.y = element_blank()) +
-        ggtitle(paste("Number of Evictions vs"), input$var1) +
         guides(fill = guide_legend("Number of Evictions"))
     )
+  )
+  
+  # Download data
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      paste("FloridaEvictions.csv")
+    },
+    content = function(file) {
+      write.csv(df_FL, file)
+    }
   )
   
   # Data table for the data used 
   output$dt <- DT::renderDataTable(
     DT::datatable(data = df_FL[,c(6:36)],
-                  options = list(scrollX = TRUE))
+                  options = list(scrollX = TRUE),
+                  class = 'white-space: nowrap')
   )
   
   
