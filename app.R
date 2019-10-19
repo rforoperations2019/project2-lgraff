@@ -202,9 +202,9 @@ server <- function(input, output) {
     }
   )
   
-  # Data table rendering. Do not include geo identifying columns
+  # Render Data table. Do not include geo identifying columns
   output$dt <- DT::renderDataTable(
-    DT::datatable(data = df_FL[,c(6:36)],
+    DT::datatable(data = df_FL[,c(6:27,34)],
                   options = list(scrollX = TRUE),
                   class = 'white-space: nowrap')
   )
